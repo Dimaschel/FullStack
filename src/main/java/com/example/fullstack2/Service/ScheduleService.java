@@ -37,9 +37,15 @@ public class ScheduleService {
     }
 
     public String deleteSchedulePost(Long id) {
-        if(!scheduleRepository.existsById(id)) {
-            return "Рассписание не найдено";
+        Schedule schedule = scheduleRepository.findById(id).orElseThrow(() -> new RuntimeException("Расписание не найдено"));
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User curUser = (User) auth.getPrincipal();
+
+        if (!schedule.getOwner().getId().equals(curUser.getId())) {
+            throw new RuntimeException("Только владелец может отменить расписание");
         }
+
         scheduleRepository.deleteById(id);
         return "Успешно удалено";
     }

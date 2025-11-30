@@ -19,7 +19,7 @@ public class Information {
     private String name;
 
     @Column(nullable = false)
-    private Integer countHelps;
+    private Integer countHelps = 0;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

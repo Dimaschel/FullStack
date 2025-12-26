@@ -3,13 +3,14 @@ import { Announcement } from '../App';
 
 interface AnnouncementListProps {
   announcements: Announcement[];
+  onRefresh?: () => void;
 }
 
-export function AnnouncementList({ announcements }: AnnouncementListProps) {
+export function AnnouncementList({ announcements, onRefresh }: AnnouncementListProps) {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-gray-800">Активные объявления</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Активные объявления</h2>
         <p className="text-gray-600 mt-2">
           Всего объявлений: {announcements.length}
         </p>
@@ -24,7 +25,11 @@ export function AnnouncementList({ announcements }: AnnouncementListProps) {
       ) : (
         <div className="space-y-4">
           {announcements.map((announcement) => (
-            <AnnouncementCard key={announcement.id} announcement={announcement} />
+            <AnnouncementCard 
+              key={announcement.id} 
+              announcement={announcement}
+              onRefresh={onRefresh}
+            />
           ))}
         </div>
       )}

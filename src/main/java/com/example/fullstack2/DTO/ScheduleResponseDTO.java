@@ -4,6 +4,7 @@ import com.example.fullstack2.Entity.ScheduleStatus;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 public class ScheduleResponseDTO {
@@ -16,4 +17,5 @@ public class ScheduleResponseDTO {
     private Long responderId;
     private String ownerName;
     private String responderName;
+    private List<ScheduleAttachmentResponseDTO> attachments;
 }

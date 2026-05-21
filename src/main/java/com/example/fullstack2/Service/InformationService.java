@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -69,6 +70,28 @@ public class InformationService {
         information.setCountHelps(information.getCountHelps() + 1);
         Information updated = informationRepository.save(information);
         return informationMapper.toResponseDTO(updated);
+    }
+
+    public InformationResponseDTO updateInformation(InformationDTO requestDTO) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User curUser = (User) auth.getPrincipal();
+        requestDTO.setUserId(curUser.getId());
+
+        Information information = informationRepository.findByUserId(curUser.getId())
+                .orElseThrow(() -> new RuntimeException("Information not found for user id: " + curUser.getId()));
+
+        information.setAge(requestDTO.getAge());
+        information.setName(requestDTO.getName());
+
+        Information updated = informationRepository.save(information);
+        return informationMapper.toResponseDTO(updated);
+    }
+
+    public Optional<InformationResponseDTO> getMyInformation() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User curUser = (User) auth.getPrincipal();
+        Optional<Information> information = informationRepository.findByUserId(curUser.getId());
+        return information.map(informationMapper::toResponseDTO);
     }
 
 }

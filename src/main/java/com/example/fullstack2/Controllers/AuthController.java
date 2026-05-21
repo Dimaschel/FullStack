@@ -2,9 +2,9 @@ package com.example.fullstack2.Controllers;
 
 import com.example.fullstack2.DTO.JwtResponse;
 import com.example.fullstack2.DTO.LoginRequest;
+import com.example.fullstack2.DTO.RefreshTokenRequest;
 import com.example.fullstack2.DTO.SignupRequest;
 import com.example.fullstack2.Entity.User;
-import com.example.fullstack2.Entity.UserDetailImpl;
 import com.example.fullstack2.Repository.UserRepository;
 import com.example.fullstack2.Security.JwtUtils;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final JwtUtils jwtUtils;
-    private final UserDetailImpl userDetailImpl;
     private final PasswordEncoder encoder;
     private final UserRepository userRepository;
     private final AuthenticationManager authenticationManager;
@@ -35,15 +34,37 @@ public class AuthController {
         try {
             Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            String jwt = jwtUtils.generateToken(authentication);
-
             User user = (User) authentication.getPrincipal();
+            String accessToken = jwtUtils.generateAccessToken(authentication);
+            String refreshToken = jwtUtils.generateRefreshToken(user);
 
-            return ResponseEntity.ok(new JwtResponse(jwt, user.getEmail(), user.getUserType().name()));
+            return ResponseEntity.ok(new JwtResponse(accessToken, refreshToken, user.getEmail(), user.getUserType().name(), user.getId()));
         }
         catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@RequestBody RefreshTokenRequest request) {
+        String refreshToken = request.getRefreshToken();
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().body("Refresh token is required");
+        }
+
+        if (!jwtUtils.validateRefreshToken(refreshToken)) {
+            return ResponseEntity.status(401).body("Invalid refresh token");
+        }
+
+        String email = jwtUtils.getUsernameFromToken(refreshToken);
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(401).body("User not found");
+        }
+
+        String newAccessToken = jwtUtils.generateAccessToken(user);
+        String newRefreshToken = jwtUtils.generateRefreshToken(user);
+        return ResponseEntity.ok(new JwtResponse(newAccessToken, newRefreshToken, user.getEmail(), user.getUserType().name(), user.getId()));
     }
 
     @PostMapping("/register")

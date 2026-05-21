@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiService, JwtResponse } from '../services/api';
 
 interface AuthContextType {
@@ -17,7 +17,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: React.PropsWithChildren) {
   const [user, setUser] = useState<{ email: string; userType: string; userId: number } | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId: response.userId,
       });
       localStorage.setItem('token', response.token);
+      localStorage.setItem('refreshToken', response.refreshToken);
       localStorage.setItem('user', JSON.stringify({
         email: response.email,
         userType: response.userType,
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   };
 
@@ -100,4 +102,3 @@ export function useAuth() {
   }
   return context;
 }
-

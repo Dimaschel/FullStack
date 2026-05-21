@@ -1,0 +1,82 @@
+name: Container CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Backend tests and package
+        run: ./mvnw test package
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/main/resources/static/package-lock.json
+
+      - name: Frontend tests
+        working-directory: src/main/resources/static
+        run: npm ci && npm test && npm run build
+
+      - name: Validate compose file
+        run: docker compose config
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Smoke test containers
+        run: |
+          docker compose up -d
+          for i in {1..30}; do
+            if curl -fsS http://localhost/health; then
+              docker compose ps
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v
+
+  deploy:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Deploy over SSH
+        if: vars.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ vars.DEPLOY_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ vars.DEPLOY_PATH }}
+            git pull --ff-only
+            docker compose pull || true
+            docker compose up -d --build
+            docker compose ps

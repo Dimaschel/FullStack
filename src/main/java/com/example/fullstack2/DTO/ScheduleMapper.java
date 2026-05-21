@@ -5,10 +5,16 @@ import com.example.fullstack2.Entity.ScheduleStatus;
 import com.example.fullstack2.Entity.User;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 public class ScheduleMapper {
 
     public ScheduleResponseDTO toResponseDTO(Schedule schedule) {
+        return toResponseDTO(schedule, List.of());
+    }
+
+    public ScheduleResponseDTO toResponseDTO(Schedule schedule, List<ScheduleAttachmentResponseDTO> attachments) {
         ScheduleResponseDTO dto = new ScheduleResponseDTO();
         dto.setId(schedule.getId());
         dto.setTask(schedule.getTask());
@@ -23,6 +29,7 @@ public class ScheduleMapper {
         }
 
         dto.setOwnerName(schedule.getOwner().getEmail());
+        dto.setAttachments(attachments);
 
         return dto;
     }

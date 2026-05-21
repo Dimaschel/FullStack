@@ -26,7 +26,7 @@ public class JwtFilter extends OncePerRequestFilter {
         try {
             String Jwt = getJwtFromRequest(request);
 
-            if (StringUtils.hasText(Jwt) && jwtUtils.validateToken(Jwt)) {
+            if (StringUtils.hasText(Jwt) && jwtUtils.validateAccessToken(Jwt)) {
                 String userName = jwtUtils.getUsernameFromToken(Jwt);
 
                 UserDetails userDetails = userDetailImpl.loadUserByUsername(userName);

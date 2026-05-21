@@ -1,8 +1,8 @@
-import { Clock, MapPin, HelpCircle, User, CheckCircle, X, Trash2 } from 'lucide-react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { Clock, MapPin, HelpCircle, User, CheckCircle, Trash2, Download, FileText, Upload } from 'lucide-react';
 import { Announcement } from '../App';
-import { apiService } from '../services/api';
+import { apiService, ScheduleAttachment } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { useState } from 'react';
 
 interface AnnouncementCardProps {
   announcement: Announcement;
@@ -14,7 +14,13 @@ export function AnnouncementCard({ announcement, onRefresh }: AnnouncementCardPr
   const [isResponding, setIsResponding] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [attachments, setAttachments] = useState<ScheduleAttachment[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
   // Проверка условий для отображения кнопки отмены
   const canCancelResponse = 
@@ -24,6 +30,30 @@ export function AnnouncementCard({ announcement, onRefresh }: AnnouncementCardPr
     Number(announcement.responderId) === Number(user.userId) && 
     announcement.status !== 'COMPLETED' && 
     announcement.status !== 'CANCELLED';
+
+  const isAdmin = user?.userType === 'ADMIN';
+
+  useEffect(() => {
+    setAttachments(announcement.attachments ?? []);
+  }, [announcement.attachments]);
+
+  const loadAttachments = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    setAttachmentsLoading(true);
+    setAttachmentError('');
+
+    try {
+      const data = await apiService.getScheduleAttachments(announcement.id);
+      setAttachments(data);
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Ошибка загрузки файлов');
+    } finally {
+      setAttachmentsLoading(false);
+    }
+  };
 
   const handleRespond = async () => {
     if (!user || user.userType !== 'HELPER') {
@@ -94,6 +124,64 @@ export function AnnouncementCard({ announcement, onRefresh }: AnnouncementCardPr
     }
   };
 
+  const handleAttachmentUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    setUploadingAttachment(true);
+    setAttachmentError('');
+
+    try {
+      const createdAttachment = await apiService.uploadScheduleAttachment(announcement.id, file);
+      setAttachments((prev) => [createdAttachment, ...prev]);
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Ошибка загрузки файла');
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleAttachmentOpen = async (attachmentId: number) => {
+    setAttachmentError('');
+
+    try {
+      const { url } = await apiService.getScheduleAttachmentDownloadUrl(attachmentId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Ошибка получения ссылки на файл');
+    }
+  };
+
+  const handleAttachmentDelete = async (attachmentId: number) => {
+    if (!confirm('Удалить этот файл?')) {
+      return;
+    }
+
+    setDeletingAttachmentId(attachmentId);
+    setAttachmentError('');
+
+    try {
+      await apiService.deleteScheduleAttachment(attachmentId);
+      setAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Ошибка удаления файла');
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
+  const handleAttachmentSelectClick = () => {
+    if (uploadingAttachment) {
+      return;
+    }
+
+    attachmentInputRef.current?.click();
+  };
+
   const statusColors: Record<string, string> = {
     OPEN: 'bg-green-100 text-green-800',
     IN_PROGRESS: 'bg-blue-100 text-blue-800',
@@ -158,6 +246,93 @@ export function AnnouncementCard({ announcement, onRefresh }: AnnouncementCardPr
       {error && (
         <div className="mt-4 p-3 bg-red-50 border-2 border-red-200 rounded-xl">
           <p className="text-red-600 text-sm">{error}</p>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="mt-6 rounded-2xl border-2 border-gray-100 bg-gray-50 p-4">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h4 className="text-base font-semibold text-gray-900">Файлы объявления</h4>
+              <p className="text-sm text-gray-600">Только администратор может загружать, скачивать и удалять вложения.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAttachmentSelectClick}
+              disabled={uploadingAttachment}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Upload size={18} />
+              <span>{uploadingAttachment ? 'Загрузка...' : 'Загрузить файл'}</span>
+            </button>
+          </div>
+
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            className="hidden"
+            accept=".jpg,.jpeg,.png,.pdf,.txt"
+            onChange={handleAttachmentUpload}
+            disabled={uploadingAttachment}
+          />
+
+          <p className="mb-4 text-xs text-gray-500">
+            Допустимые типы: JPG, PNG, PDF, TXT. Максимальный размер: 5 МБ.
+          </p>
+
+          {attachmentError && (
+            <div className="mb-4 rounded-xl border-2 border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              {attachmentError}
+            </div>
+          )}
+
+          {attachmentsLoading ? (
+            <p className="text-sm text-gray-600">Загрузка файлов...</p>
+          ) : attachments.length === 0 ? (
+            <p className="text-sm text-gray-600">Файлы пока не прикреплены.</p>
+          ) : (
+            <div className="grid gap-3">
+              {attachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="rounded-lg bg-indigo-100 p-2">
+                      <FileText className="text-indigo-600" size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-900">{attachment.fileName}</p>
+                      <p className="text-sm text-gray-600">
+                        {(attachment.size / 1024).toFixed(1)} КБ · {new Date(attachment.uploadedAt).toLocaleString('ru-RU')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row md:justify-self-end">
+                    <button
+                      type="button"
+                      onClick={() => handleAttachmentOpen(attachment.id)}
+                      className="inline-flex min-h-11 min-w-[120px] items-center justify-center gap-2 rounded-xl border-2 border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+                    >
+                      <Download size={16} />
+                      <span>Открыть</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAttachmentDelete(attachment.id)}
+                      disabled={deletingAttachmentId === attachment.id}
+                      className="inline-flex min-h-11 min-w-[120px] items-center justify-center gap-2 rounded-xl border-2 border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Trash2 size={16} />
+                      <span>{deletingAttachmentId === attachment.id ? 'Удаление...' : 'Удалить'}</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,5 +1,12 @@
 HELP.md
 target/
+node_modules/
+package-lock.json
+.env
+.env.*
+!.env.example
+.m2/
+
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -26,6 +33,9 @@ target/
 /nbdist/
 /.nb-gradle/
 build/
+coverage/
+playwright-report/
+test-results/
 !**/src/main/**/build/
 !**/src/test/**/build/
 

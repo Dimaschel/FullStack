@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
 export interface LoginRequest {
   email: string;
@@ -14,6 +14,7 @@ export interface SignupRequest {
 
 export interface JwtResponse {
   token: string;
+  refreshToken: string;
   type: string;
   email: string;
   userType: string;
@@ -30,6 +31,51 @@ export interface Schedule {
   responderId?: number;
   ownerName?: string;
   responderName?: string;
+  attachments?: ScheduleAttachment[];
+}
+
+export interface ScheduleAttachment {
+  id: number;
+  scheduleId: number;
+  fileName: string;
+  contentType: string;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface PresignedUrlResponse {
+  url: string;
+}
+
+export interface WeatherInfo {
+  city: string;
+  date: string;
+  description: string;
+  averageTemperatureCelsius: number;
+  minTemperatureCelsius: number;
+  maxTemperatureCelsius: number;
+  source: string;
+}
+
+export interface ScheduleListResponse {
+  content: Schedule[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export type ScheduleTimeOrder = 'nearest' | 'farthest';
+
+export interface GetSchedulesParams {
+  search?: string;
+  status?: Schedule['status'];
+  timeOrder?: ScheduleTimeOrder;
+  page?: number;
+  size?: number;
+  signal?: AbortSignal;
 }
 
 export interface ScheduleDTO {
@@ -57,17 +103,36 @@ export interface Information {
 }
 
 class ApiService {
+  private refreshPromise: Promise<JwtResponse> | null = null;
+
   private getToken(): string | null {
     return localStorage.getItem('token');
   }
 
+  private getRefreshToken(): string | null {
+    return localStorage.getItem('refreshToken');
+  }
+
+  private setTokens(tokens: JwtResponse): void {
+    localStorage.setItem('token', tokens.token);
+    localStorage.setItem('refreshToken', tokens.refreshToken);
+  }
+
+  private clearTokens(): void {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+  }
+
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryOnUnauthorized = true
   ): Promise<T> {
     const token = this.getToken();
+    const isFormData = options.body instanceof FormData;
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     };
 
@@ -79,6 +144,33 @@ class ApiService {
       ...options,
       headers,
     });
+
+    if (response.status === 401 && retryOnUnauthorized && endpoint !== '/auth/refresh') {
+      const refreshToken = this.getRefreshToken();
+      if (!refreshToken) {
+        this.clearTokens();
+        throw new Error('Unauthorized');
+      }
+
+      try {
+        if (!this.refreshPromise) {
+          this.refreshPromise = this.refresh(refreshToken)
+            .then((tokens) => {
+              this.setTokens(tokens);
+              return tokens;
+            })
+            .finally(() => {
+              this.refreshPromise = null;
+            });
+        }
+
+        await this.refreshPromise;
+        return this.request<T>(endpoint, options, false);
+      } catch {
+        this.clearTokens();
+        throw new Error('Session expired. Please login again.');
+      }
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -113,9 +205,36 @@ class ApiService {
     });
   }
 
+  async refresh(refreshToken: string): Promise<JwtResponse> {
+    return this.request<JwtResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }, false);
+  }
+
   // Schedule endpoints
-  async getAllSchedules(): Promise<Schedule[]> {
-    return this.request<Schedule[]>('/Schedule/getAllSchedule');
+  async getAllSchedules(params: GetSchedulesParams = {}): Promise<ScheduleListResponse> {
+    const queryParams = new URLSearchParams();
+
+    if (params.search) {
+      queryParams.set('search', params.search);
+    }
+    if (params.status) {
+      queryParams.set('status', params.status);
+    }
+    if (params.timeOrder) {
+      queryParams.set('timeOrder', params.timeOrder);
+    }
+    if (params.page !== undefined) {
+      queryParams.set('page', String(params.page));
+    }
+    if (params.size !== undefined) {
+      queryParams.set('size', String(params.size));
+    }
+
+    const query = queryParams.toString();
+    const endpoint = query ? `/Schedule/getAllSchedule?${query}` : '/Schedule/getAllSchedule';
+    return this.request<ScheduleListResponse>(endpoint, { signal: params.signal });
   }
 
   async getScheduleById(id: number): Promise<Schedule> {
@@ -161,6 +280,29 @@ class ApiService {
     });
   }
 
+  async getScheduleAttachments(scheduleId: number): Promise<ScheduleAttachment[]> {
+    return this.request<ScheduleAttachment[]>(`/admin/schedules/${scheduleId}/attachments`);
+  }
+
+  async uploadScheduleAttachment(scheduleId: number, file: File): Promise<ScheduleAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<ScheduleAttachment>(`/admin/schedules/${scheduleId}/attachments`, {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async getScheduleAttachmentDownloadUrl(attachmentId: number): Promise<PresignedUrlResponse> {
+    return this.request<PresignedUrlResponse>(`/admin/schedules/attachments/${attachmentId}/download-url`);
+  }
+
+  async deleteScheduleAttachment(attachmentId: number): Promise<void> {
+    await this.request<void>(`/admin/schedules/attachments/${attachmentId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Information endpoints
   async getMyInformation(): Promise<Information | null> {
     try {
@@ -198,6 +340,20 @@ class ApiService {
     });
   }
 
+  async getCurrentWeather(city?: string): Promise<WeatherInfo | null> {
+    const query = city ? `?city=${encodeURIComponent(city)}` : '';
+
+    const response = await fetch(`${API_BASE_URL}/integrations/weather/current${query}`);
+    if (response.status === 204) {
+      return null;
+    }
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error || `HTTP error! status: ${response.status}`);
+    }
+    return response.json() as Promise<WeatherInfo>;
+  }
+
   // Health check
   async healthCheck(): Promise<string> {
     return this.request<string>('/main/health-check');
@@ -205,4 +361,3 @@ class ApiService {
 }
 
 export const apiService = new ApiService();
-

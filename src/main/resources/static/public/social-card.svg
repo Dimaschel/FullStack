@@ -1,0 +1,16 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" rx="32" fill="#EEF4FF"/>
+  <circle cx="1030" cy="120" r="160" fill="#C7D8FF"/>
+  <circle cx="180" cy="520" r="140" fill="#D8F0FF"/>
+  <rect x="90" y="110" width="620" height="410" rx="28" fill="white"/>
+  <rect x="140" y="180" width="260" height="26" rx="13" fill="#5B6CFF"/>
+  <rect x="140" y="230" width="420" height="24" rx="12" fill="#C6D2FF"/>
+  <rect x="140" y="275" width="360" height="24" rx="12" fill="#C6D2FF"/>
+  <rect x="140" y="360" width="180" height="88" rx="20" fill="#EEF4FF"/>
+  <rect x="342" y="360" width="180" height="88" rx="20" fill="#EEF4FF"/>
+  <path d="M800 378C800 309.517 855.517 254 924 254H953C1021.48 254 1077 309.517 1077 378V407C1077 475.483 1021.48 531 953 531H924C855.517 531 800 475.483 800 407V378Z" fill="#5B6CFF"/>
+  <path d="M891 420L924 453L985 392" stroke="white" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="140" y="145" fill="#24324A" font-family="Arial, sans-serif" font-size="58" font-weight="700">Помощь рядом</text>
+  <text x="140" y="322" fill="#24324A" font-family="Arial, sans-serif" font-size="30">Объявления о помощи, безопасные отклики</text>
+  <text x="140" y="485" fill="#5A6780" font-family="Arial, sans-serif" font-size="28">SEO-оптимизированный сервис взаимопомощи</text>
+</svg>
